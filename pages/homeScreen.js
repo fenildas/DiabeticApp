@@ -130,10 +130,11 @@ const HomeScreen = ({ navigation }) => {
         contentStyle={styles.buttonContent}
       >
         <View>
-          <Text style={styles.mealTypeText}>Add {mealType}</Text>
+          <Text style={styles.mealTypeText}>{mealType}</Text>
           <Text style={styles.carbsText}>
             Carbs Consumed - {getTotalCarbsNum(mealType)}g
           </Text>
+         
         </View>
       </Button>
     );
@@ -254,6 +255,10 @@ const styles = StyleSheet.create({
   carbsText: {
     fontSize: 14,
     color: "white",
+  },
+  correctionText: {
+    fontSize: 14,
+    color: "#454241"
   },
   buttoncontainer: {
     flex: 1,

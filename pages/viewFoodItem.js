@@ -9,13 +9,19 @@ import {
   Divider,
   List,
   Text,
+  IconButton,
+  Tooltip,
+  useTheme,
 } from "react-native-paper";
 import AddCarbsModal from "../ui/addCarbsModel";
 import { firebase } from "../config";
 import { useIsFocused } from '@react-navigation/native';
+import { bloodGlucoseBefore } from "../../DiabeticApp-backend/controller/userCarbsDataController";
 
 
 const ViewFoodItem = ({ navigation, route }) => {
+  const theme = useTheme();
+
   const dispatch = useDispatch();
   const isFocused = useIsFocused();
   const user = useSelector((state) => state.user);
@@ -24,12 +30,40 @@ const ViewFoodItem = ({ navigation, route }) => {
   const [foodItems, setFoodItems] = useState([]);
   const [totalCarbs, setTotalCarbs] = useState("");
   const [insulinDose, setInsulinDose] = useState(0);
+  const [userCRR, setUserCRR] = useState(0);
   const [bloodGlucoseLevel, setBloodGlucoseLevel] = useState(0);
+  const [targetBloodGlucose, setTargetBloodGlucose] = useState(0);
   const [bloodGlucoseLevelBeforeMeal, setBloodGlucoseLevelBeforeMeal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [modalVisibleBeforeMeal, setModalVisibleBeforeMeal] = useState(false);
   const [modalVisibleAfterMeal, setModalVisibleAfterMeal] = useState(false);
   const [userICR, setUserICR] = useState("");
+  
+  useEffect(() => {
+      const fetchUserData = async () => {
+        const user = firebase.auth().currentUser;
+
+        if (user) {
+          const userId = user.uid;
+          const userProfRef = firebase
+            .firestore()
+            .collection("userProfile")
+            .doc(userId);
+
+          const userProf = await userProfRef.get();
+
+          if (userProf.exists) {
+            const userProfData = userProf.data();
+            setTargetBloodGlucose(userProfData.targetBloodGlucose);
+          } else {
+            console.log("User profile data not found.");
+          }
+        } else {
+          console.log("No user is currently logged in.");
+        }
+      };
+      fetchUserData();
+    });
 
   const [userStateData, setUserStateData] = useState({});
   const [weight, setWeight] = useState("");
@@ -45,6 +79,8 @@ const ViewFoodItem = ({ navigation, route }) => {
   const [lhICR, setLhICR] = useState("");
   const [dnICR, setDnICR] = useState("");
   const [crr, setCRR] = useState("");
+  const [showSummary, setShowSummary] = useState(false);
+
 
   useEffect(() => {
     if (isFocused) {
@@ -91,6 +127,7 @@ const ViewFoodItem = ({ navigation, route }) => {
             setLhICR(userProfData.lhICR);
             setDnICR(userProfData.dnICR);
             setCRR(userProfData.crr);
+            setTargetBloodGlucose(userProfData.targetBloodGlucose);
           } else {
             console.log("User profile data not found.");
           }
@@ -105,7 +142,7 @@ const ViewFoodItem = ({ navigation, route }) => {
   const getUpdatedUserICR = async () => {
     console.log("HER: ", user?.user?.uid, tag);
     await axios
-      .get("https://diabeticapp-backend-dt6j.onrender.com/api/updateUserICR", {
+      .get("https://diabetesapp-backend.onrender.com/api/updateUserICR", {
         params: {
           userId: user?.user?.uid,
           mealType: tag,
@@ -128,7 +165,7 @@ const ViewFoodItem = ({ navigation, route }) => {
     setLoading(true);
     await axios
       .get(
-        `https://diabeticapp-backend-dt6j.onrender.com/api/getDataByMealType/Date?userId=${params.userId}&mealType=${params.mealType}`
+        `https://diabetesapp-backend.onrender.com/api/getDataByMealType/Date?userId=${params.userId}&mealType=${params.mealType}`
       )
       .then((res) => {
         setLoading(false);
@@ -139,9 +176,16 @@ const ViewFoodItem = ({ navigation, route }) => {
         setBloodGlucoseLevel(
           res?.data?.bloodGlucoseLevel ? res?.data?.bloodGlucoseLevel : 0
         );
-        setBloodGlucoseLevelBeforeMeal(
-          res?.data?.bloodGlucoseLevelBeforeMeal ? res?.data?.bloodGlucoseLevelBeforeMeal : 0
-        );
+        setTargetBloodGlucose(
+          res?.data?.targetBloodGlucose ? res?.data?.targetBloodGlucose : 0
+        )
+        // setBloodGlucoseLevelBeforeMeal(
+        //   res?.data?.bloodGlucoseLevelBeforeMeal ? res?.data?.bloodGlucoseLevelBeforeMeal : 0
+        // );
+        setUserCRR(res?.data?.userCRR);
+        console.log("This is crr")
+        console.log(res?.data?.userCRR);
+        console.log("This is blood glucose before meal"+res?.data?.bloodGlucoseBeforeMeal);
         console.log("Data:", res, res?.data ? res?.data?.mealItems : []);
       })
       .catch((e) => {
@@ -158,7 +202,7 @@ const ViewFoodItem = ({ navigation, route }) => {
     setLoading(true);
     await axios
       .put(
-        `https://diabeticapp-backend-dt6j.onrender.com/api/addBloodGlucose`,
+        `https://diabetesapp-backend.onrender.com/api/addBloodGlucose`,
         params
       )
       .then((res) => {
@@ -173,18 +217,22 @@ const ViewFoodItem = ({ navigation, route }) => {
 
   const addBloodGlucoseBeforeMeal = async (data) => {
     let params = {
-      _id: objectId,
-      bloodGlucoseLevelBeforeMeal: data,
+      userId: user?.user?.uid, //set user id because it is not saved
+      mealType: tag,
+      bloodGlucoseBeforeMeal: data,
     };
     setLoading(true);
+    console.log(params.userId+params.mealType+params.bloodGlucoseBeforeMeal+"This the data we are saving for blood glucose")
     await axios
-      .put(
-        `https://diabeticapp-backend-dt6j.onrender.com/api/addBloodGlucoseBeforeMeal`,
+      .post(
+        `https://diabetesapp-backend.onrender.com/api/addBloodGlucoseBeforeMeal`,
         params
       )
       .then((res) => {
+        console.log("Xyz",res);
+        // setBloodGlucoseLevelBeforeMeal(res?.data?.bloodGlucoseBeforeMeal ? res?.data?.bloodGlucoseBeforeMeal : 0);
         setLoading(false);
-        navigation.goBack();
+       navigation.goBack();
       })
       .catch((e) => {
         setLoading(false);
@@ -192,21 +240,78 @@ const ViewFoodItem = ({ navigation, route }) => {
       });
   };
 
+  const getBloodGlucoseBeforeMeal = async () => {
+    let params = {
+      userId: user?.user?.uid,
+      mealType: tag,
+    };
+    setLoading(true);
+    await axios
+      .get(
+        `https://diabetesapp-backend.onrender.com/api/getBloodGlucoseBeforeMeal?userId=${params.userId}&mealType=${params.mealType}`
+      )
+      .then((res) => {
+        setLoading(false);
+        // setFoodItems(res?.data ? res?.data?.mealItems : []);
+        // setTotalCarbs(res?.data ? res?.data?.totalCarbs : "");
+        // setInsulinDose(res?.data ? res?.data?.insulinDose : 0);
+        // setObjectId(res?.data ? res?.data?._id : null);
+        // setBloodGlucoseLevel(
+        //   res?.data?.bloodGlucoseLevel ? res?.data?.bloodGlucoseLevel : 0
+        // );
+        // setTargetBloodGlucose(
+        //   res?.data?.targetBloodGlucose ? res?.data?.targetBloodGlucose : 0
+        // )
+        setBloodGlucoseLevelBeforeMeal(
+          res?.data?.bloodGlucoseBeforeMeal ? res?.data?.bloodGlucoseBeforeMeal : 0
+        );
+        console.log("getting data"+ res);
+        console.log("This is blood glucose before meal"+res?.data?.bloodGlucoseBeforeMeal);
+        
+      })
+      .catch((e) => {
+        setLoading(false);
+        console.log("Error : ", e);
+      });
+  };
+
+
+  // const addBloodGlucoseBeforeMeal = async (data) => {
+  //   console.log("HER: ", user?.user?.uid, tag);
+  //   await axios
+  //     .put("https://diabetesapp-backend.onrender.com/api/addBloodGlucoseBeforeMeal", {
+  //       params: {
+  //         userId: user?.user?.uid,
+  //         mealType: tag,
+  //       },
+  //     })
+  //     .then((res) => {
+  //       console.log("Res :", res);
+  //       setBloodGlucoseLevelBeforeMeal(data);
+  //     })
+  //     .catch((err) => {
+  //       console.log("Err :", err);
+  //     });
+  // };
   useEffect(() => {
     getUpdatedUserICR();
+    getBloodGlucoseBeforeMeal();
     getFoodItems();
+  
+    
   }, []);
 
   const handleSaveBloodGlucose = (data) => {
     addBloodGlucose(data);
     setModalVisibleAfterMeal(false);
     setBloodGlucoseLevel(data); 
+    console.log("target"+targetBloodGlucose+"blood glucose"+bloodGlucoseLevel);
   };
 
   const handleSaveBloodGlucoseBeforeMeal = (data) => {
     addBloodGlucoseBeforeMeal(data);
     setModalVisibleBeforeMeal(false);
-    setBloodGlucoseLevelBeforeMeal(data); 
+    //setBloodGlucoseLevelBeforeMeal(data); 
   };
 
   const getCarbs = (item) => {
@@ -265,9 +370,23 @@ const ViewFoodItem = ({ navigation, route }) => {
     );
   };
 
+  const getCorrectionFactor = () => {
+    try {
+        console.log("blood glucose level"+bloodGlucoseLevel+"target bg"+targetBloodGlucose+"userCRR"+userCRR);
+        const x = ((bloodGlucoseLevel - targetBloodGlucose)/userCRR);
+        const roundedX = Math.round(x * 2) / 2; // Round to the nearest half
+        return roundedX;
+        
+      } catch (error) {
+        console.log(error);
+        throw error;
+      }
+  };
+
+
   return (
     <View style={styles.container}>
-      {foodItems?.length > 0 ? (
+      {showSummary ? (
         <List.Section style={styles.listSection}>
           <List.Subheader>
             {" "}
@@ -290,15 +409,58 @@ const ViewFoodItem = ({ navigation, route }) => {
             <ActivityIndicator size="large" style={styles.activityIndicator} />
           ) : (
             <>
-              <Text style={styles.message}>You have no Food Items!!</Text>
+
+              {foodItems.length > 0 &&(
+                <>
+                  <Text style={styles.message}>Food is already added. Check summary for more details.</Text>
+                </>
+               )}
+
+              {bloodGlucoseLevelBeforeMeal === 0  && (
+                      <>
+                      <Button
+                        mode="contained"
+                        onPress={() => setModalVisibleBeforeMeal(true)}
+                        style={styles.button}
+                        
+                      >
+                        Add Blood Glucose Reading
+                        {' '}
+                        Before Meal
+                      </Button>
+                        
+                      </>
+
+                    )}
+                    <AddCarbsModal
+                      visible={modalVisibleBeforeMeal}
+                      placeholder={"Enter Blood-glusoce reading Before Meal"}
+                      onDismiss={() => setModalVisibleBeforeMeal(false)}
+                      onSave={handleSaveBloodGlucoseBeforeMeal}
+                    />
+                    
+              {foodItems.length <= 0 &&(
+                <>
+                  {/* <Text style={styles.message}>You have no Food Items!!</Text> */}
+                  <Button
+                    mode="contained"
+                    onPress={onAddFood}
+                    style={styles.button}
+                  >
+                    Add Food Here
+                  </Button>
+                </>
+              )}
+              
+              
               <Button
                 mode="contained"
-                onPress={onAddFood}
+                onPress={() => setShowSummary(!showSummary)}
                 style={styles.button}
               >
-                Add Food Here
+                Summary For Meal
               </Button>
-              {/* <Text style={styles.messageICR}>Update Your ICR !!</Text>
+              {/* <Text style={styles.messageICR}>After food intake please press for your dose !!</Text>
               <Button
                 mode="contained"
                 onPress={updateUserICR}
@@ -311,7 +473,7 @@ const ViewFoodItem = ({ navigation, route }) => {
         </View>
       )}
       <Divider />
-      {foodItems?.length > 0 ? (
+      {showSummary  ? (
         <View style={styles.view}>
           <Text variant="titleMedium">
             Your ICR as per the records - 
@@ -319,61 +481,116 @@ const ViewFoodItem = ({ navigation, route }) => {
             {lhICR ? `, Lunch ICR - ${lhICR}` : ''}
             {dnICR ? `, Dinner ICR - ${dnICR}` : ''}
           </Text>
+
+          {totalCarbs > 0 ?
+          (
           <Text variant="titleMedium">
             Total Carbs Consumed - {totalCarbs} g
           </Text>
+          ): null}
+
           {insulinDose > 0 ? (
             <Text variant="titleMedium">
-              Total Insulin Dose - {insulinDose} g
-            </Text>
-          ) : null}
-          {bloodGlucoseLevelBeforeMeal > 0 ? (
-            <Text variant="titleMedium">
-              Total Blood Glucose Level Before Meal - {bloodGlucoseLevelBeforeMeal} g
-            </Text>
-          ) : null}
-          
-          {bloodGlucoseLevel > 0 ? (
-            <Text variant="titleMedium">
-              Total Blood Glucose Level After Meal - {bloodGlucoseLevel} g
+              Total Insulin Dose - {insulinDose} units
+
             </Text>
           ) : null}
 
+          {bloodGlucoseLevelBeforeMeal ? (
+            
+            <View variant="titleMedium" style={{flexDirection: "row", alignItems: "center"}}>
+              <Text 
+              variant="titleMedium"
+              style={{marginRight: 25 }}
+              >
+                Total Blood Glucose Level Before Meal - {bloodGlucoseLevelBeforeMeal} mmol/L
+              </Text>
+              
+              <Tooltip title="Edit" leaveTouchDelay={1000}>
+                <IconButton
+                  icon="pencil"
+                  onPress={() => setModalVisibleBeforeMeal(true)}
+                  iconColor={theme.colors.primary}
+                  size={15}
+                  style={{margin:"-14px"}}
+                />
+              </Tooltip>
+            </View>
+          ) : null}
+          <AddCarbsModal
+                      visible={modalVisibleBeforeMeal}
+                      placeholder={"Edit Blood-glusoce reading Before Meal"}
+                      onDismiss={() => setModalVisibleBeforeMeal(false)}
+                      onSave={handleSaveBloodGlucoseBeforeMeal}
+          />
+          
+          
+          {bloodGlucoseLevel > 0 ? (
+            <View variant="titleMedium" style={{flexDirection: "row", alignItems: "center"}}>
+            <Text 
+            variant="titleMedium"
+            style={{marginRight: 25 }}
+            >
+              Total Blood Glucose Level After Meal - {bloodGlucoseLevel} mmol/L
+            </Text>
+            
+            <Tooltip title="Edit" leaveTouchDelay={1000}>
+              <IconButton
+                icon="pencil"
+                onPress={() => setModalVisibleAfterMeal(true)}
+                iconColor={theme.colors.primary}
+                size={15}
+                style={{margin:"-14px"}}
+              />
+            </Tooltip>
+            <AddCarbsModal
+                  visible={modalVisibleAfterMeal}
+                  placeholder={"Edit Blood-glusoce reading After Meal"}
+                  onDismiss={() => setModalVisibleAfterMeal(false)}
+                  onSave={handleSaveBloodGlucose}
+                />
+          </View>
+          ) : null}
+            
+          {bloodGlucoseLevel ? (
+            <>
+              {bloodGlucoseLevel > targetBloodGlucose ? (
+                <Text variant="titleMedium">
+                  Your correction dose - {getCorrectionFactor()} 
+                </Text>
+              ) : (
+                <Text variant="titleMedium">
+                  Your blood glucose is low - Take appropriate actions.
+                </Text>
+              )}
+            </>
+          ) : null}
+
+          {bloodGlucoseLevel == 0 && foodItems?.length > 0 ? (
+            
+              <>
+                <Button
+                  mode="contained"
+                  onPress={() => setModalVisibleAfterMeal(true)}
+                  style={styles.button}
+                >
+                  Add Blood Glucose Reading After Meal
+                </Button>
+                <AddCarbsModal
+                  visible={modalVisibleAfterMeal}
+                  placeholder={"Enter Blood-glusoce reading After Meal"}
+                  onDismiss={() => setModalVisibleAfterMeal(false)}
+                  onSave={handleSaveBloodGlucose}
+                />
+                        
+              </>
+              
+      
+          ) : null}
+          
+
         </View>
       ) : null}
-      {/* {bloodGlucoseLevelBeforeMeal === 0 && foodItems?.length > 0 && (
-        <View style={styles.addGlucose}>
-          <TouchableOpacity onPress={() => setModalVisibleBeforeMeal(true)}>
-            <Text style={{ fontSize: 20, color: "#1356ba" }}>
-              Add Blood Glucose Reading Before Meal
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      <AddCarbsModal
-        visible={modalVisibleBeforeMeal}
-        placeholder={"Enter Blood-glusoce reading Before Meal"}
-        onDismiss={() => setModalVisible(false)}
-        onSave={handleSaveBloodGlucoseBeforeMeal}
-      /> */}
-      
-      {bloodGlucoseLevel == 0 && foodItems?.length > 0 ? (
-        <View style={styles.addGlucose}>
-          <TouchableOpacity onPress={() => setModalVisibleAfterMeal(true)}>
-            <Text style={{ fontSize: 20, color: "#1356ba" }}>
-              Add Blood Glucose Reading After Meal
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-      <AddCarbsModal
-        visible={modalVisibleAfterMeal}
-        placeholder={"Enter Blood-glusoce reading After Meal"}
-        onDismiss={() => setModalVisible(false)}
-        onSave={handleSaveBloodGlucose}
-      />
-      
-      
     </View>
   );
 };
@@ -400,8 +617,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   button: {
+    whiteSpace: 'normal',
     marginTop: 16,
-    width: "50%",
+    width: '70%',
+    alignSelf: "center",
   },
   listSection: {
     marginBottom: 16,
